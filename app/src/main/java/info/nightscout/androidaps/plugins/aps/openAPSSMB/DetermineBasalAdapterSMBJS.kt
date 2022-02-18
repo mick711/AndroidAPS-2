@@ -269,7 +269,7 @@ class DetermineBasalAdapterSMBJS internal constructor(private val scriptReader: 
 
         tddAIMI = TddCalculator(aapsLogger,rh,activePlugin,profileFunction,dateUtil,iobCobCalculator, repository)
         this.mealData.put("TDDAIMI7", tddAIMI!!.averageTDD(tddAIMI!!.calculate(7)).totalAmount)
-        this.mealData.put("TDDPUMP", tddAIMI!!.calculateDaily().totalAmount)
+        this.mealData.put("TDDPUMP", tddAIMI!!.calculate24Daily().totalAmount)
 
         if (constraintChecker.isAutosensModeEnabled().value()) {
             autosensData.put("ratio", autosensDataRatio)

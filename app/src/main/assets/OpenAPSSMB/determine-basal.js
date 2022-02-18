@@ -202,8 +202,72 @@ var determine_basal = function determine_basal(glucose_status, currenttemp, iob_
         halfBasalTarget = 160; // when temptarget is 160 mg/dL, run 50% basal (120 = 75%; 140 = 60%)
         // 80 mg/dL with low_temptarget_lowers_sensitivity would give 1.5x basal, but is limited to autosens_max (1.2x by default)
     }
-    if ( high_temptarget_raises_sensitivity && profile.temptargetSet && target_bg > normalTarget
-        || profile.low_temptarget_lowers_sensitivity && profile.temptargetSet && target_bg < normalTarget ) {
+    var now = new Date().getHours();
+        if (now < 1){
+            now = 1;}
+        else {
+            console.error("Time now is "+now+"; ");
+        }
+    //*********************************************************************************
+    //**                   Start of Dynamic ISF code for predictions                 **
+    //*********************************************************************************
+
+        console.error("---------------------------------------------------------");
+        console.error( "     Dynamic ISF Beta 1.1 - rolling 24 hour  ");
+        console.error("---------------------------------------------------------");
+
+    if (meal_data.TDDAIMI7){
+        var tdd7 = meal_data.TDDAIMI7;
+            }
+        else{
+        var tdd7 = ((basal * 12)*100)/21;
+        }
+        console.error("7-day average TDD is: " +tdd7+ "; ");
+
+
+    if (meal_data.TDDPUMP){
+        var tdd_24 = meal_data.TDDPUMP;
+        }
+        else {
+        var tdd_24 = (( basal * 24 ) * 2.8);
+        }
+
+        //var TDD = (tdd7 * 0.4) + (tdd_pump * 0.6);
+
+       console.error("Rolling 24 hour TDD = "+tdd_24+"; ");
+
+        /*if ( tdd_pump > tdd7 && now < 5 || now < 7 && TDD < ( 0.8 * tdd7 ) ){
+          TDD = ( 0.8 * tdd7 );
+          console.log("Excess or too low insulin from pump so TDD set to "+TDD+" based on 75% of TDD7; ");
+          rT.reason += "TDD: " +TDD+ " due to low or high tdd from pump; ";
+          }
+
+        else if (tdd_pump < (0.33 * tdd7)){
+           TDD = (tdd7 * 0.25) + (tdd_pump * 0.75);
+           console.error("TDD weighted to pump due to low insulin usage. TDD = "+TDD+"; ");
+           rT.reason += "TDD weighted to pump due to low insulin usage. TDD = "+TDD+"; ";
+           }
+
+        else {
+             console.log("TDD = " +TDD+ " based on standard pump 60/tdd7 40 split; ");
+             rT.reason += "TDD: " +TDD+ " based on standard pump 60/tdd7 40 split; ";
+             }*/
+
+    var TDD = tdd_24;
+    var variable_sens = (277700 / (TDD * bg));
+    variable_sens = round(variable_sens,1);
+    console.log("Current sensitivity for predictions is " +variable_sens+" based on current bg");
+
+    sens = variable_sens;
+    sens = round(sens, 1);
+
+    //*********************************************************************************
+    //**                   End of Dynamic ISF code for predictions                   **
+    //*********************************************************************************
+
+    var sens_max = Math.min(profile.autosens_max, 2);
+
+    if ( high_temptarget_raises_sensitivity && profile.temptargetSet && target_bg > normalTarget || profile.low_temptarget_lowers_sensitivity && profile.temptargetSet && target_bg < normalTarget ) {
         // w/ target 100, temp target 110 = .89, 120 = 0.8, 140 = 0.67, 160 = .57, and 200 = .44
         // e.g.: Sensitivity ratio set to 0.8 based on temp target of 120; Adjusting basal from 1.65 to 1.35; ISF from 58.9 to 73.6
         //sensitivityRatio = 2/(2+(target_bg-normalTarget)/40);
@@ -213,10 +277,17 @@ var determine_basal = function determine_basal(glucose_status, currenttemp, iob_
         sensitivityRatio = Math.min(sensitivityRatio, profile.autosens_max);
         sensitivityRatio = round(sensitivityRatio,2);
         console.log("Sensitivity ratio set to "+sensitivityRatio+" based on temp target of "+target_bg+"; ");
-    } else if (typeof autosens_data !== 'undefined' && autosens_data) {
-        sensitivityRatio = autosens_data.ratio;
-        console.log("Autosens ratio: "+sensitivityRatio+"; ");
-    }
+        sens =  sens / sensitivityRatio ;
+        sens = round(sens, 1);
+        console.log("ISF from "+variable_sens+" to "+sens+ "due to temp target; ");
+        }
+        else {
+        sensitivityRatio = ( TDD / tdd7 );
+        sensitivityRatio = Math.min(sensitivityRatio, sens_max);
+        sensitivityRatio = round(sensitivityRatio,2);
+        console.log("Sensitivity ratio: "+sensitivityRatio+"; ");
+        }
+
     if (sensitivityRatio) {
         basal = profile.current_basal * sensitivityRatio;
         basal = round_basal(basal, profile);
@@ -230,12 +301,12 @@ var determine_basal = function determine_basal(glucose_status, currenttemp, iob_
     // adjust min, max, and target BG for sensitivity, such that 50% increase in ISF raises target from 100 to 120
     if (profile.temptargetSet) {
         //console.log("Temp Target set, not adjusting with autosens; ");
-    } else if (typeof autosens_data !== 'undefined' && autosens_data) {
-        if ( profile.sensitivity_raises_target && autosens_data.ratio < 1 || profile.resistance_lowers_target && autosens_data.ratio > 1 ) {
+    } else {
+        if ( profile.sensitivity_raises_target && sensitivityRatio < 1 || profile.resistance_lowers_target && sensitivityRatio > 1 ) {
             // with a target of 100, default 0.7-1.2 autosens min/max range would allow a 93-117 target range
-            min_bg = round((min_bg - 60) / autosens_data.ratio) + 60;
-            max_bg = round((max_bg - 60) / autosens_data.ratio) + 60;
-            var new_target_bg = round((target_bg - 60) / autosens_data.ratio) + 60;
+            min_bg = round((min_bg - 60) / sensitivityRatio) + 60;
+            max_bg = round((max_bg - 60) / sensitivityRatio) + 60;
+            var new_target_bg = round((target_bg - 60) / sensitivityRatio) + 60;
             // don't allow target_bg below 80
             new_target_bg = Math.max(80, new_target_bg);
             if (target_bg === new_target_bg) {
