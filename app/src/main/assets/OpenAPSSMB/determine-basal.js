@@ -346,7 +346,7 @@ var determine_basal = function determine_basal(glucose_status, currenttemp, iob_
     var minAvgDelta = Math.min(glucose_status.short_avgdelta, glucose_status.long_avgdelta);
     var maxDelta = Math.max(glucose_status.delta, glucose_status.short_avgdelta, glucose_status.long_avgdelta);
 
-    var profile_sens = round(profile.sens,1)
+    /*var profile_sens = round(profile.sens,1)
     var sens = profile.sens;
 
     var now = new Date().getHours();
@@ -415,7 +415,7 @@ var determine_basal = function determine_basal(glucose_status, currenttemp, iob_
         sens = sens;
         sens = round(sens, 1);
     }
-
+*/
     console.error("; CR:",profile.carb_ratio);
 
     // compare currenttemp to iob_data.lastTemp and cancel temp if they don't match
